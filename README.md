@@ -18,7 +18,7 @@ use {
   'anasinnyk/nvim-k8s-crd',
   requires = { 'neovim/nvim-lspconfig' },
   config = function()
-    require('k8s_crd').setup({
+    require('k8s-crd').setup({
       cache_dir = "~/.cache/k8s-schemas/",  -- Local directory relative to the current working directory
       k8s = {
         file_mask = "*.yaml",
@@ -35,7 +35,7 @@ use {
   event = { 'BufEnter *.yaml' },
   dependencies = { 'neovim/nvim-lspconfig' },
   config = function()
-    require('k8s_crd').setup({
+    require('k8s-crd').setup({
       cache_dir = "~/.cache/k8s-schemas/",  -- Local directory relative to the current working directory
       k8s = {
         file_mask = "*.yaml",
