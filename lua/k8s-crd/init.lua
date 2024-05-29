@@ -37,6 +37,8 @@ function M.setup(user_config)
       },
     },
   }))
+
+  vim.api.nvim_create_user_command('K8SSchemasGenerate', function() M.generate_schemas() end, { nargs = 0 })
 end
 
 function M.generate_schemas(version)
