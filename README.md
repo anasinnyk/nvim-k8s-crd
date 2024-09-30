@@ -26,6 +26,7 @@ use {
     })
   end
 }
+```
 
 ### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
@@ -36,7 +37,7 @@ use {
   dependencies = { 'neovim/nvim-lspconfig' },
   config = function()
     require('k8s-crd').setup({
-      cache_dir = "~/.cache/k8s-schemas/",  -- Local directory relative to the current working directory
+      cache_dir = vim.fn.expand("~/.cache/k8s-schemas/"),
       k8s = {
         file_mask = "*.yaml",
       },
@@ -55,6 +56,8 @@ require('k8s_crd').setup({
   },
 })
 ```
+
+Setting `k8s.file_mask` to `nil` will disable the automatic matcher (you can use [`yaml-companion`](https://github.com/someone-stole-my-name/yaml-companion.nvim) for setting a smarter matcher).
 
 ## Commands
 
