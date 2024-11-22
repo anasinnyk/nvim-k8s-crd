@@ -28,15 +28,17 @@ function M.setup(user_config)
     M.generate_schemas()
   end
 
-  lspconfig.yamlls.setup(vim.tbl_extend('force', lspconfig.yamlls.document_config.default_config, {
-    settings = {
-      yaml = {
-        schemas = {
-          [all_json_path] = M.config.k8s.file_mask,
+  if M.config.k8s.file_mask ~= nil then
+    lspconfig.yamlls.setup(vim.tbl_extend('force', lspconfig.yamlls.document_config.default_config, {
+      settings = {
+        yaml = {
+          schemas = {
+            [all_json_path] = M.config.k8s.file_mask,
+          },
         },
       },
-    },
-  }))
+    }))
+  end
 
   vim.api.nvim_create_user_command('K8SSchemasGenerate', function() M.generate_schemas() end, { nargs = 0 })
 end
@@ -117,4 +119,3 @@ function M.generate_schemas(version)
 end
 
 return M
-
