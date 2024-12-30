@@ -40,8 +40,6 @@ function M.setup(user_config)
         },
       },
     }))
-
-    Log.info("Registered schemas for yaml-ls: " .. vim.json.encode(lspconfig.yamlls.document_config))
   end
 
   vim.api.nvim_create_user_command("K8SSchemasGenerate", function()
