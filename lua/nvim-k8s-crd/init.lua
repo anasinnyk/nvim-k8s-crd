@@ -22,7 +22,9 @@ end
 function M.setup(user_config)
   M.config = vim.tbl_extend("force", M.config, user_config or {})
   local current_context = get_current_context()
-  local all_json_path = Path:joinpath(M.config.cache_dir, current_context, "/all.json")
+  local all_json_path = Path:new(M.config.cache_dir, current_context, "/all.json")
+
+  Log.debug("Current json path: " .. tostring(all_json_path))
 
   if not Path:new(all_json_path):exists() then
     M.generate_schemas()
@@ -47,12 +49,10 @@ end
 
 function M.generate_schemas(version)
   local current_context = get_current_context()
-  local schema_dir = Path:joinpath(M.config.cache_dir, current_context)
-  local all_file = Path:joinpath(schema_dir, "/all.json")
+  local schema_dir = Path:new(M.config.cache_dir, current_context)
+  local all_file = schema_dir:joinpath("/all.json")
 
   Path:new(schema_dir):mkdir({ parents = true })
-
-  Log.info("Generating Kubernetes schemas for context: " .. current_context)
 
   local fetch_openapi_job = Job:new({
     command = "kubectl",
@@ -71,7 +71,7 @@ function M.generate_schemas(version)
       on_exit = function(j, result_val)
         if result_val ~= 0 then
           Log.error("Error fetching OpenAPI: " .. api.serverRelativeURL, j:result())
-          callback()
+          callback(false)
           return
         end
 
@@ -104,21 +104,12 @@ function M.generate_schemas(version)
             updated_schemas.components.schemas[k] = crd
           end
 
-          Path:new(schema_dir, path .. ".json"):write(vim.json.encode(updated_schemas), "w")
-          Log.info(
-            "Generated ("
-            .. current_job
-            .. "/"
-            .. total_jobs
-            .. "): "
-            .. schema_dir
-            .. "/"
-            .. path
-            .. ".json"
-          )
+          local schema_path = schema_dir:joinpath(path .. ".json")
+          schema_path:write(vim.json.encode(updated_schemas), "w")
+          Log.debug("Generated (" .. current_job .. "/" .. total_jobs .. "): " .. tostring(schema_path))
         end
 
-        callback()
+        callback(true)
       end,
     }):start()
   end
@@ -136,15 +127,27 @@ function M.generate_schemas(version)
     local function run_next_schema(i)
       current_job = i
 
-      if i > #paths then
+      if i > total_jobs then
         Path:new(all_file):write(vim.json.encode({ ["oneOf"] = all_types }), "w")
-        Log.info("Generated: " .. all_file)
+        Log.debug("Generated: " .. tostring(all_file))
         return
       end
 
       local path_api = paths[i]
-      fetch_schema(path_api[1], path_api[2], function()
-        run_next_schema(i + 1)
+      fetch_schema(path_api[1], path_api[2], function(result)
+        if result then
+          run_next_schema(i + 1)
+        else
+          Log.debug("Retrying schema: " .. path_api[1])
+          local timer = vim.loop.new_timer()
+          timer:start(
+            100,
+            0,
+            vim.schedule_wrap(function()
+              run_next_schema(i)
+            end)
+          )
+        end
       end)
     end
 
