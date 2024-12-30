@@ -26,7 +26,7 @@ function M.setup(user_config)
 
   Log.debug("Current json path: " .. tostring(all_json_path))
 
-  if not Path:new(all_json_path):exists() then
+  if not all_json_path:exists() then
     M.generate_schemas()
   end
 
@@ -35,11 +35,13 @@ function M.setup(user_config)
       settings = {
         yaml = {
           schemas = {
-            [all_json_path] = M.config.k8s.file_mask,
+            [tostring(all_json_path)] = M.config.k8s.file_mask,
           },
         },
       },
     }))
+
+    Log.info("Registered schemas for yaml-ls: " .. vim.json.encode(lspconfig.yamlls.document_config))
   end
 
   vim.api.nvim_create_user_command("K8SSchemasGenerate", function()
