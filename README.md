@@ -18,7 +18,7 @@ use {
   'anasinnyk/nvim-k8s-crd',
   requires = { 'neovim/nvim-lspconfig' },
   config = function()
-    require('k8s-crd').setup({
+    require('nvim-k8s-crd').setup({
       cache_dir = "~/.cache/k8s-schemas/",  -- Local directory relative to the current working directory
       k8s = {
         file_mask = "*.yaml",
@@ -47,7 +47,7 @@ use {
 ## Configuration
 
 ```lua
-require('k8s-crd').setup({
+require('nvim-k8s-crd').setup({
   cache_dir = "./.k8s-schemas/",  -- Local directory relative to the current working directory
   k8s = {
     file_mask = "*.yaml",  -- File mask to match Kubernetes manifests
