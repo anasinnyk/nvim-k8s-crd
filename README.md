@@ -47,7 +47,7 @@ use {
 ## Configuration
 
 ```lua
-require('k8s_crd').setup({
+require('k8s-crd').setup({
   cache_dir = "./.k8s-schemas/",  -- Local directory relative to the current working directory
   k8s = {
     file_mask = "*.yaml",  -- File mask to match Kubernetes manifests
