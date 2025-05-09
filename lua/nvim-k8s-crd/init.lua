@@ -1,7 +1,6 @@
 local Job = require("plenary.job")
 local Path = require("plenary.path")
 local Log = require("plenary.log")
-local lspconfig = require("lspconfig")
 
 local M = {}
 
@@ -31,15 +30,45 @@ function M.setup(user_config)
   end
 
   if M.config.k8s.file_mask ~= nil then
-    lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
-      settings = {
-        yaml = {
-          schemas = {
-            [tostring(all_json_path)] = M.config.k8s.file_mask,
+    if vim.lsp.start then -- NeoVIM >= 0.11
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = "yaml",
+        callback = function(args)
+          local clients = vim.lsp.get_active_clients({ bufnr = args.buf })
+          local has_yamlls = false
+
+          for _, client in ipairs(clients) do
+            if client.name == "yamlls" then
+              has_yamlls = true
+              if not (client.config.settings and client.config.settings.yaml and client.config.settings.yaml.shemas) then
+                client.config.settings = client.config.settings or {}
+                client.config.settings.yaml = client.config.settings.yaml or {}
+                client.config.settings.yaml.schemas = client.config.settings.yaml.schemas or {}
+              end
+
+              vim.tbl_extend("force", client.config.settings.yaml.schemas, {
+                [tostring(all_json_path)] = M.config.k8s.file_mask,
+              })
+
+              client.notify("workspace/didChangeConfiguration", {
+                settings = client.config.settings,
+              })
+            end
+          end
+        end
+      })
+    else
+      local lspconfig = require("lspconfig") -- NeoVIM < O.11
+      lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
+        settings = {
+          yaml = {
+            schemas = {
+              [tostring(all_json_path)] = M.config.k8s.file_mask,
+            },
           },
         },
-      },
-    }))
+      }))
+    end
   end
 
   vim.api.nvim_create_user_command("K8SSchemasGenerate", function()
@@ -47,7 +76,7 @@ function M.setup(user_config)
   end, { nargs = 0 })
 end
 
-function M.generate_schemas(version)
+function M.generate_schemas()
   local current_context = get_current_context()
   local schema_dir = Path:new(M.config.cache_dir, current_context)
   local all_file = schema_dir:joinpath("/all.json")
@@ -134,8 +163,8 @@ function M.generate_schemas(version)
       end
 
       local path_api = paths[i]
-      fetch_schema(path_api[1], path_api[2], function(result)
-        if result then
+      fetch_schema(path_api[1], path_api[2], function(res)
+        if res then
           run_next_schema(i + 1)
         else
           Log.debug("Retrying schema: " .. path_api[1])
