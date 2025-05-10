@@ -35,20 +35,20 @@ function M.setup(user_config)
         pattern = "yaml",
         callback = function(args)
           local clients = vim.lsp.get_active_clients({ bufnr = args.buf })
-          local has_yamlls = false
 
           for _, client in ipairs(clients) do
             if client.name == "yamlls" then
-              has_yamlls = true
-              if not (client.config.settings and client.config.settings.yaml and client.config.settings.yaml.shemas) then
+              if not (client.config.settings and client.config.settings.yaml and client.config.settings.yaml.schemas) then
                 client.config.settings = client.config.settings or {}
                 client.config.settings.yaml = client.config.settings.yaml or {}
-                client.config.settings.yaml.schemas = client.config.settings.yaml.schemas or {}
+                client.config.settings.yaml.schemas = {}
               end
 
-              vim.tbl_extend("force", client.config.settings.yaml.schemas, {
+              client.config.settings.yaml.schemas = vim.tbl_extend("force", client.config.settings.yaml.schemas, {
                 [tostring(all_json_path)] = M.config.k8s.file_mask,
               })
+
+              Log.debug("Sending new schemas: " .. vim.inspect(client.config.settings.yaml.schemas))
 
               client.notify("workspace/didChangeConfiguration", {
                 settings = client.config.settings,
