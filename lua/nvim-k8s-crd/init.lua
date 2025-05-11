@@ -48,6 +48,8 @@ function M.setup(user_config)
                 settings = new_settings,
               })
 
+              Log.debug("Config yamlls: " .. tostring(client.config))
+
               client.stop()
 
               vim.defer_fn(function()
