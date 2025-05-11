@@ -38,21 +38,33 @@ function M.setup(user_config)
 
           for _, client in ipairs(clients) do
             if client.name == "yamlls" then
-              if not (client.config.settings and client.config.settings.yaml and client.config.settings.yaml.schemas) then
-                client.config.settings = client.config.settings or {}
-                client.config.settings.yaml = client.config.settings.yaml or {}
-                client.config.settings.yaml.schemas = {}
-              end
-
-              client.config.settings.yaml.schemas = vim.tbl_extend("force", client.config.settings.yaml.schemas, {
+              local new_settings = vim.deepcopy(client.config.settings or {})
+              new_settings.yaml = new_settings.yaml or {}
+              new_settings.yaml.schemas = vim.tbl_extend("force", new_settings.yaml.schemas or {}, {
                 [tostring(all_json_path)] = M.config.k8s.file_mask,
               })
 
-              Log.debug("Sending new schemas: " .. vim.inspect(client.config.settings.yaml.schemas))
-
-              client.notify("workspace/didChangeConfiguration", {
-                settings = client.config.settings,
+              local new_config = vim.tbl_extend("force", client.config, {
+                settings = new_settings,
               })
+
+              client.stop()
+
+              vim.defer_fn(function()
+                for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+                  local ft = vim.bo[bufnr].filetype
+                  if ft == "yaml" or ft == "json" then
+                    local existing = vim.lsp.get_active_clients({ bufnr = bufnr })
+                    local already_has_yamlls = vim.iter(existing):any(function(c)
+                      return c.name == "yamlls"
+                    end)
+
+                    if not already_has_yamlls then
+                      vim.lsp.start(vim.tbl_extend("force", new_config, { bufnr = bufnr }))
+                    end
+                  end
+                end
+              end, 500)
             end
           end
         end
