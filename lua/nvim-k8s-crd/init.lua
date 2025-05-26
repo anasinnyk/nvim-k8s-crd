@@ -1,7 +1,10 @@
 local Job = require("plenary.job")
 local Path = require("plenary.path")
-local Log = require("plenary.log")
-local lspconfig = require("lspconfig")
+local Log = require("plenary.log").new({
+  plugin = "nvim-k8s-crd",
+  level = "debug",
+  use_console = false,
+})
 
 local M = {}
 
@@ -10,7 +13,7 @@ M.config = {
   cache_dir = vim.fn.expand("~/.cache/k8s-schemas/"),
   cache_ttl = 3600 * 24, -- Time to live for cache in seconds (1 day)
   k8s = {
-    file_mask = "/*.yaml",
+    file_mask = "*.yaml",
   },
 }
 
@@ -30,7 +33,37 @@ function M.setup(user_config)
     M.generate_schemas()
   end
 
-  if M.config.k8s.file_mask ~= nil then
+  M.config.k8s.file_mask = M.config.k8s.file_mask or "*.yaml"
+  if vim.lsp and vim.lsp.start then -- NeoVIM >= O.11
+    vim.lsp.config.yamlls = vim.lsp.config.yamlls or {
+      cmd = { "yaml-language-server", "--stdio" },
+      filetypes = { "yaml", "json" },
+      settings = {
+        yaml = {
+          validate = true,
+          schemaStore = { enable = false },
+          schemas = {},
+        },
+      },
+    }
+    vim.lsp.config.yamlls.settings.yaml.schemas = vim.tbl_extend(
+      "force",
+      vim.lsp.config.yamlls.settings.yaml.schemas, {
+        [tostring(all_json_path)] = M.config.k8s.file_mask,
+      }
+    )
+
+    for _, client in ipairs(vim.lsp.get_active_clients()) do
+      if client.name == "yamlls" then
+        client.stop()
+      end
+    end
+
+    vim.defer_fn(function()
+      vim.lsp.enable({ "yamlls" })
+    end, 100)
+  else -- NeoVIM < O.11
+    local lspconfig = require("lspconfig")
     lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
       settings = {
         yaml = {
@@ -44,10 +77,11 @@ function M.setup(user_config)
 
   vim.api.nvim_create_user_command("K8SSchemasGenerate", function()
     M.generate_schemas()
+    vim.lsp.enable({ "yamlls" })
   end, { nargs = 0 })
 end
 
-function M.generate_schemas(version)
+function M.generate_schemas()
   local current_context = get_current_context()
   local schema_dir = Path:new(M.config.cache_dir, current_context)
   local all_file = schema_dir:joinpath("/all.json")
@@ -134,8 +168,8 @@ function M.generate_schemas(version)
       end
 
       local path_api = paths[i]
-      fetch_schema(path_api[1], path_api[2], function(result)
-        if result then
+      fetch_schema(path_api[1], path_api[2], function(res)
+        if res then
           run_next_schema(i + 1)
         else
           Log.debug("Retrying schema: " .. path_api[1])

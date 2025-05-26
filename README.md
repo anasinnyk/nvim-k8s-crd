@@ -33,7 +33,7 @@ use {
 ```lua
 use {
   'anasinnyk/nvim-k8s-crd',
-  event = { 'BufEnter *.yaml' },
+  event = { "BufReadPre", "BufNewFile" }, -- or { 'BufEnter *.yaml' },
   dependencies = { 'neovim/nvim-lspconfig' },
   opts = {
     cache_dir = "~/.cache/k8s-schemas/",
