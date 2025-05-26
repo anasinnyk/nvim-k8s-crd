@@ -1,6 +1,10 @@
 local Job = require("plenary.job")
 local Path = require("plenary.path")
-local Log = require("plenary.log")
+local Log = require("plenary.log").new({
+  plugin = "nvim-k8s-crd",
+  level = "debug",
+  use_console = false,
+})
 
 local M = {}
 
@@ -9,7 +13,7 @@ M.config = {
   cache_dir = vim.fn.expand("~/.cache/k8s-schemas/"),
   cache_ttl = 3600 * 24, -- Time to live for cache in seconds (1 day)
   k8s = {
-    file_mask = "/*.yaml",
+    file_mask = "*.yaml",
   },
 }
 
@@ -29,64 +33,51 @@ function M.setup(user_config)
     M.generate_schemas()
   end
 
-  if M.config.k8s.file_mask ~= nil then
-    if vim.lsp.start then -- NeoVIM >= 0.11
-      vim.api.nvim_create_autocmd("FileType", {
-        pattern = "yaml",
-        callback = function(args)
-          local clients = vim.lsp.get_active_clients({ bufnr = args.buf })
+  M.config.k8s.file_mask = M.config.k8s.file_mask or "*.yaml"
+  if vim.lsp and vim.lsp.start then -- NeoVIM >= O.11
+    vim.lsp.config.yamlls = vim.lsp.config.yamlls or {
+      cmd = { "yaml-language-server", "--stdio" },
+      filetypes = { "yaml", "json" },
+      settings = {
+        yaml = {
+          validate = true,
+          schemaStore = { enable = false },
+          schemas = {},
+        },
+      },
+    }
+    vim.lsp.config.yamlls.settings.yaml.schemas = vim.tbl_extend(
+      "force",
+      vim.lsp.config.yamlls.settings.yaml.schemas, {
+        [tostring(all_json_path)] = M.config.k8s.file_mask,
+      }
+    )
 
-          for _, client in ipairs(clients) do
-            if client.name == "yamlls" then
-              local new_settings = vim.deepcopy(client.config.settings or {})
-              new_settings.yaml = new_settings.yaml or {}
-              new_settings.yaml.schemas = vim.tbl_extend("force", new_settings.yaml.schemas or {}, {
-                [tostring(all_json_path)] = M.config.k8s.file_mask,
-              })
+    for _, client in ipairs(vim.lsp.get_active_clients()) do
+      if client.name == "yamlls" then
+        client.stop()
+      end
+    end
 
-              local new_config = vim.tbl_extend("force", client.config, {
-                settings = new_settings,
-              })
-
-              Log.debug("Config yamlls: " .. tostring(client.config))
-
-              client.stop()
-
-              vim.defer_fn(function()
-                for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-                  local ft = vim.bo[bufnr].filetype
-                  if ft == "yaml" or ft == "json" then
-                    local existing = vim.lsp.get_active_clients({ bufnr = bufnr })
-                    local already_has_yamlls = vim.iter(existing):any(function(c)
-                      return c.name == "yamlls"
-                    end)
-
-                    if not already_has_yamlls then
-                      vim.lsp.start(vim.tbl_extend("force", new_config, { bufnr = bufnr }))
-                    end
-                  end
-                end
-              end, 500)
-            end
-          end
-        end
-      })
-    else
-      local lspconfig = require("lspconfig") -- NeoVIM < O.11
-      lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
-        settings = {
-          yaml = {
-            schemas = {
-              [tostring(all_json_path)] = M.config.k8s.file_mask,
-            },
+    vim.defer_fn(function()
+      vim.lsp.enable({ "yamlls" })
+    end, 100)
+  else -- NeoVIM < O.11
+    local lspconfig = require("lspconfig")
+    lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
+      settings = {
+        yaml = {
+          schemas = {
+            [tostring(all_json_path)] = M.config.k8s.file_mask,
           },
         },
-      }))
-    end
+      },
+    }))
   end
 
   vim.api.nvim_create_user_command("K8SSchemasGenerate", function()
     M.generate_schemas()
+    vim.lsp.enable({ "yamlls" })
   end, { nargs = 0 })
 end
 
