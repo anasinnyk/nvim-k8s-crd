@@ -17,7 +17,7 @@ M.config = {
   },
 }
 
-function get_current_context()
+local function get_current_context()
   return vim.fn.system("kubectl config current-context"):gsub("%s+", "")
 end
 
@@ -82,6 +82,10 @@ function M.setup(user_config)
   end
 
   vim.api.nvim_create_user_command("K8SSchemasGenerate", function()
+    if vim.fn.executable("kubectl") ~= 1 then
+      Log.error("Cannot generate schemas: kubectl is missing.")
+      return
+    end
     M.generate_schemas()
     vim.lsp.enable({ "yamlls" })
   end, { nargs = 0 })
@@ -115,7 +119,7 @@ function M.generate_schemas()
           return
         end
 
-        local schema = vim.json.decode(table.concat(j:result(), "\n"))
+        local schema = pcall(vim.json.decode, table.concat(j:result(), "\n"))
         if schema.components and schema.components.schemas then
           local updated_schemas = { ["components"] = { ["schemas"] = schema.components.schemas } }
 
@@ -156,7 +160,7 @@ function M.generate_schemas()
 
   fetch_openapi_job:after(function()
     local result = fetch_openapi_job:result()
-    local schema_list = vim.json.decode(table.concat(result, "\n"))
+    local schema_list = pcall(vim.json.decode, table.concat(result, "\n"))
 
     local paths = {}
     for path, api in pairs(schema_list.paths) do
