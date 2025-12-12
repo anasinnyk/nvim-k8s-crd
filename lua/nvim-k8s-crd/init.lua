@@ -24,6 +24,12 @@ end
 -- Set user configuration
 function M.setup(user_config)
   M.config = vim.tbl_extend("force", M.config, user_config or {})
+
+  if vim.fn.executable("kubectl") ~= 1 then
+    Log.info("kubectl not found. nvim-k8s-crd plugin will not run.")
+    return
+  end
+
   local current_context = get_current_context()
   local all_json_path = Path:new(M.config.cache_dir, current_context, "/all.json")
 
