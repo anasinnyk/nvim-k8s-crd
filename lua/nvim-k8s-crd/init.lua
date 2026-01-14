@@ -48,30 +48,29 @@ function M.setup(user_config)
 
   M.config.k8s.file_mask = M.config.k8s.file_mask or "*.yaml"
   if vim.lsp and vim.lsp.start then -- NeoVIM >= O.11
-    vim.lsp.config.yamlls = vim.lsp.config.yamlls or {
-      cmd = { "yaml-language-server", "--stdio" },
-      filetypes = { "yaml", "json" },
-      settings = {
-        yaml = {
-          validate = true,
-          schemaStore = { enable = false },
-          schemas = {},
+    -- Initialize the full structure if not exists
+    if not vim.lsp.config.yamlls then
+      vim.lsp.config.yamlls = {
+        cmd = { "yaml-language-server", "--stdio" },
+        filetypes = { "yaml", "json" },
+        settings = {
+          yaml = {
+            validate = true,
+            schemaStore = { enable = false },
+            schemas = {},
+          },
         },
-      },
-    }
-    
-    -- Ensure nested structure exists
-    vim.lsp.config.yamlls.settings = vim.lsp.config.yamlls.settings or {}
-    vim.lsp.config.yamlls.settings.yaml = vim.lsp.config.yamlls.settings.yaml or {}
-    vim.lsp.config.yamlls.settings.yaml.schemas = vim.lsp.config.yamlls.settings.yaml.schemas or {}
-    
-    vim.lsp.config.yamlls.settings.yaml.schemas = vim.tbl_extend(
-      "force",
-      vim.lsp.config.yamlls.settings.yaml.schemas,
-      {
-        [tostring(all_json_path)] = M.config.k8s.file_mask,
       }
-    )
+    end
+    
+    -- Safely navigate and set schemas
+    local yamlls_config = vim.lsp.config.yamlls
+    yamlls_config.settings = yamlls_config.settings or {}
+    yamlls_config.settings.yaml = yamlls_config.settings.yaml or {}
+    yamlls_config.settings.yaml.schemas = yamlls_config.settings.yaml.schemas or {}
+    
+    -- Add our schema
+    yamlls_config.settings.yaml.schemas[tostring(all_json_path)] = M.config.k8s.file_mask
 
     for _, client in ipairs(vim.lsp.get_clients()) do
       if client.name == "yamlls" then
@@ -84,7 +83,7 @@ function M.setup(user_config)
     end, 100)
   else -- NeoVIM < O.11
     local lspconfig = require("lspconfig")
-    lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
+    lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config or {}, {
       settings = {
         yaml = {
           schemas = {
