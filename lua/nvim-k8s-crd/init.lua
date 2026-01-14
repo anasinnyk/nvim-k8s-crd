@@ -8,14 +8,17 @@ local Log = require("plenary.log").new({
 
 local M = {}
 
--- Configuration
-M.config = {
-  cache_dir = vim.fn.expand("~/.cache/k8s-schemas/"),
+-- Configuration defaults (cache_dir expansion deferred to setup)
+local default_config = {
+  cache_dir = "~/.cache/k8s-schemas/",
   cache_ttl = 3600 * 24, -- Time to live for cache in seconds (1 day)
   k8s = {
     file_mask = "*.yaml",
   },
 }
+
+-- Initialize with defaults
+M.config = vim.deepcopy(default_config)
 
 local function get_current_context()
   return vim.fn.system("kubectl config current-context"):gsub("%s+", "")
@@ -23,7 +26,11 @@ end
 
 -- Set user configuration
 function M.setup(user_config)
-  M.config = vim.tbl_extend("force", M.config, user_config or {})
+  -- Merge user config with defaults
+  M.config = vim.tbl_extend("force", vim.deepcopy(default_config), user_config or {})
+  
+  -- Expand cache_dir path after merging
+  M.config.cache_dir = vim.fn.expand(M.config.cache_dir)
 
   if vim.fn.executable("kubectl") ~= 1 then
     Log.info("kubectl not found. nvim-k8s-crd plugin will not run.")
@@ -41,23 +48,29 @@ function M.setup(user_config)
 
   M.config.k8s.file_mask = M.config.k8s.file_mask or "*.yaml"
   if vim.lsp and vim.lsp.start then -- NeoVIM >= O.11
-    vim.lsp.config.yamlls = vim.lsp.config.yamlls or {
-      cmd = { "yaml-language-server", "--stdio" },
-      filetypes = { "yaml", "json" },
-      settings = {
-        yaml = {
-          validate = true,
-          schemaStore = { enable = false },
-          schemas = {},
+    -- Initialize the full structure if not exists
+    if not vim.lsp.config.yamlls then
+      vim.lsp.config.yamlls = {
+        cmd = { "yaml-language-server", "--stdio" },
+        filetypes = { "yaml", "json" },
+        settings = {
+          yaml = {
+            validate = true,
+            schemaStore = { enable = false },
+            schemas = {},
+          },
         },
-      },
-    }
-    vim.lsp.config.yamlls.settings.yaml.schemas = vim.tbl_extend(
-      "force",
-      vim.lsp.config.yamlls.settings.yaml.schemas, {
-        [tostring(all_json_path)] = M.config.k8s.file_mask,
       }
-    )
+    end
+    
+    -- Safely navigate and set schemas
+    local yamlls_config = vim.lsp.config.yamlls
+    yamlls_config.settings = yamlls_config.settings or {}
+    yamlls_config.settings.yaml = yamlls_config.settings.yaml or {}
+    yamlls_config.settings.yaml.schemas = yamlls_config.settings.yaml.schemas or {}
+    
+    -- Add our schema
+    yamlls_config.settings.yaml.schemas[tostring(all_json_path)] = M.config.k8s.file_mask
 
     for _, client in ipairs(vim.lsp.get_clients()) do
       if client.name == "yamlls" then
@@ -70,7 +83,7 @@ function M.setup(user_config)
     end, 100)
   else -- NeoVIM < O.11
     local lspconfig = require("lspconfig")
-    lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config, {
+    lspconfig.yamlls.setup(vim.tbl_extend("force", lspconfig.yamlls.document_config.default_config or {}, {
       settings = {
         yaml = {
           schemas = {
@@ -119,8 +132,8 @@ function M.generate_schemas()
           return
         end
 
-        local schema = pcall(vim.json.decode, table.concat(j:result(), "\n"))
-        if schema.components and schema.components.schemas then
+        local ok, schema = pcall(vim.json.decode, table.concat(j:result(), "\n"))
+        if ok and schema.components and schema.components.schemas then
           local updated_schemas = { ["components"] = { ["schemas"] = schema.components.schemas } }
 
           for k, crd in pairs(schema.components.schemas) do
@@ -160,7 +173,12 @@ function M.generate_schemas()
 
   fetch_openapi_job:after(function()
     local result = fetch_openapi_job:result()
-    local schema_list = pcall(vim.json.decode, table.concat(result, "\n"))
+    local ok, schema_list = pcall(vim.json.decode, table.concat(result, "\n"))
+
+    if not ok or not schema_list or not schema_list.paths then
+      Log.error("Failed to parse OpenAPI schema list")
+      return
+    end
 
     local paths = {}
     for path, api in pairs(schema_list.paths) do
