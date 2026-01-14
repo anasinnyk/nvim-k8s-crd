@@ -119,8 +119,8 @@ function M.generate_schemas()
           return
         end
 
-        local schema = pcall(vim.json.decode, table.concat(j:result(), "\n"))
-        if schema.components and schema.components.schemas then
+        local ok, schema = pcall(vim.json.decode, table.concat(j:result(), "\n"))
+        if ok and schema.components and schema.components.schemas then
           local updated_schemas = { ["components"] = { ["schemas"] = schema.components.schemas } }
 
           for k, crd in pairs(schema.components.schemas) do
@@ -160,7 +160,12 @@ function M.generate_schemas()
 
   fetch_openapi_job:after(function()
     local result = fetch_openapi_job:result()
-    local schema_list = pcall(vim.json.decode, table.concat(result, "\n"))
+    local ok, schema_list = pcall(vim.json.decode, table.concat(result, "\n"))
+
+    if not ok or not schema_list or not schema_list.paths then
+      Log.error("Failed to parse OpenAPI schema list")
+      return
+    end
 
     local paths = {}
     for path, api in pairs(schema_list.paths) do
