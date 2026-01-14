@@ -59,9 +59,16 @@ function M.setup(user_config)
         },
       },
     }
+    
+    -- Ensure nested structure exists
+    vim.lsp.config.yamlls.settings = vim.lsp.config.yamlls.settings or {}
+    vim.lsp.config.yamlls.settings.yaml = vim.lsp.config.yamlls.settings.yaml or {}
+    vim.lsp.config.yamlls.settings.yaml.schemas = vim.lsp.config.yamlls.settings.yaml.schemas or {}
+    
     vim.lsp.config.yamlls.settings.yaml.schemas = vim.tbl_extend(
       "force",
-      vim.lsp.config.yamlls.settings.yaml.schemas, {
+      vim.lsp.config.yamlls.settings.yaml.schemas,
+      {
         [tostring(all_json_path)] = M.config.k8s.file_mask,
       }
     )
