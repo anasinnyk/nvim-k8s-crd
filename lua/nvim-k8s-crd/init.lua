@@ -8,14 +8,17 @@ local Log = require("plenary.log").new({
 
 local M = {}
 
--- Configuration
-M.config = {
-  cache_dir = vim.fn.expand("~/.cache/k8s-schemas/"),
+-- Configuration defaults (cache_dir expansion deferred to setup)
+local default_config = {
+  cache_dir = "~/.cache/k8s-schemas/",
   cache_ttl = 3600 * 24, -- Time to live for cache in seconds (1 day)
   k8s = {
     file_mask = "*.yaml",
   },
 }
+
+-- Initialize with defaults
+M.config = vim.deepcopy(default_config)
 
 local function get_current_context()
   return vim.fn.system("kubectl config current-context"):gsub("%s+", "")
@@ -23,7 +26,11 @@ end
 
 -- Set user configuration
 function M.setup(user_config)
-  M.config = vim.tbl_extend("force", M.config, user_config or {})
+  -- Merge user config with defaults
+  M.config = vim.tbl_extend("force", vim.deepcopy(default_config), user_config or {})
+  
+  -- Expand cache_dir path after merging
+  M.config.cache_dir = vim.fn.expand(M.config.cache_dir)
 
   if vim.fn.executable("kubectl") ~= 1 then
     Log.info("kubectl not found. nvim-k8s-crd plugin will not run.")
